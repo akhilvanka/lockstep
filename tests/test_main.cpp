@@ -347,6 +347,47 @@ static void test_serialize() {
     CHECK(!deserialize(blob, g));
 }
 
+static void test_dirty_digest() {
+    Hart h(64 * 1024);
+    uint64_t d0 = digest(h);
+
+    h.store_ram(kMemBase + Hart::kPageBytes - 4, 0x1122334455667788ULL, 8);
+    uint64_t d1 = digest(h);
+    CHECK(d1 != d0);
+    Hart g = h;
+    g.mark_all();
+    CHECK_EQ(digest(g), d1);
+
+    std::mt19937_64 rng(99);
+    for (int i = 0; i < 500; i++) {
+        uint64_t addr = kMemBase + rng() % (64 * 1024 - 8);
+        unsigned w = 1u << (rng() % 4);
+        h.store_ram(addr, rng(), w);
+        if (i % 50 == 0) {
+            uint64_t inc = digest(h);
+            Hart f = h;
+            f.mark_all();
+            CHECK_EQ(digest(f), inc);
+        }
+    }
+
+    uint64_t before = digest(h);
+    h.mem[12345] ^= 0x40;
+    h.mark(kMemBase + 12345, 1);
+    uint64_t after = digest(h);
+    CHECK(after != before);
+    Hart f = h;
+    f.mark_all();
+    CHECK_EQ(digest(f), after);
+
+    auto lane = make_local_lane(make_uop_engine());
+    lane->load({0x00000013}, 64 * 1024);
+    uint64_t l0 = lane->step(0).digest;
+    lane->inject(1, 777, 3);
+    uint64_t l1 = lane->step(0).digest;
+    CHECK(l1 != l0);
+}
+
 static std::vector<uint32_t> harness_guest() {
     Asm a;
     a.li(5, 0x40000000);
@@ -497,6 +538,7 @@ int main() {
     test_traps();
     test_differential();
     test_serialize();
+    test_dirty_digest();
     test_harness();
     test_remote_lane();
     printf("%d checks, %d failures\n", g_checks, g_fails);

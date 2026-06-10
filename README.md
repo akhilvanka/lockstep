@@ -11,6 +11,14 @@ Two different engines instead of two copies: an implementation bug
 shows up as a lane divergence instead of silent agreement. This caught
 a real SRAI decode bug in lane B during development.
 
+The digest is incremental: RAM is hashed per 4 KB page, stores and
+fault injections mark pages dirty, and each sync rehashes only the
+dirty set, so the per quantum cost is O(working set) instead of
+O(memory) while still covering every byte. Anything that writes memory
+outside the store path (snapshot restore, injection) invalidates or
+marks its pages, and the tests cross check the incremental digest
+against a cold rebuild after random store storms.
+
     campaign: 500 runs, one random architectural bit flip each
       detected+recovered: 483
       masked (overwritten before next sync): 17
@@ -19,7 +27,7 @@ a real SRAI decode bug in lane B during development.
 ## run
 
     cmake -B build && cmake --build build
-    ./build/lockstep_tests        # 192 checks
+    ./build/lockstep_tests        # 207 checks
     ./build/redundant_demo        # clean run + bit-flip campaign
 
 Lane B can run on another machine (different CPU/OS/compiler):

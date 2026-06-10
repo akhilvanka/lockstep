@@ -207,6 +207,7 @@ struct UopEngine final : Engine {
     static void st_bytes(Hart& h, uint64_t addr, uint64_t v, unsigned n) {
         for (unsigned i = 0; i < n; i++)
             h.mem[addr - kMemBase + i] = (uint8_t)(v >> (8 * i));
+        h.mark(addr, n);
     }
 
     bool do_load(Hart& h, const Uop& u, unsigned n, bool sign) {

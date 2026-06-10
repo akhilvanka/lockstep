@@ -26,6 +26,8 @@ enum class Trap : uint8_t {
 const char* trap_name(Trap t);
 
 struct Hart {
+    static constexpr size_t kPageBytes = 4096;
+
     uint64_t pc = kMemBase;
     uint64_t x[32] = {};
     uint64_t instret = 0;
@@ -35,11 +37,25 @@ struct Hart {
     int exit_code = 0;
     Trap trap = Trap::None;
     uint64_t trap_pc = 0;
+    mutable std::vector<uint64_t> page_hash;
+    mutable std::vector<uint8_t> page_dirty;
 
     explicit Hart(size_t mem_bytes = 256 * 1024) : mem(mem_bytes, 0) {}
 
     bool in_ram(uint64_t addr, unsigned bytes) const {
         return addr >= kMemBase && addr - kMemBase + bytes <= mem.size();
+    }
+
+    void mark(uint64_t addr, unsigned bytes) {
+        if (page_dirty.empty()) return;
+        size_t p0 = (addr - kMemBase) / kPageBytes;
+        size_t p1 = (addr - kMemBase + bytes - 1) / kPageBytes;
+        for (size_t p = p0; p <= p1 && p < page_dirty.size(); p++)
+            page_dirty[p] = 1;
+    }
+    void mark_all() {
+        page_hash.clear();
+        page_dirty.clear();
     }
 
     uint64_t load_ram(uint64_t addr, unsigned bytes) const {
@@ -49,6 +65,7 @@ struct Hart {
     }
     void store_ram(uint64_t addr, uint64_t v, unsigned bytes) {
         std::memcpy(mem.data() + (addr - kMemBase), &v, bytes);
+        mark(addr, bytes);
     }
 
     void load_image(const std::vector<uint32_t>& words, uint64_t addr = kMemBase) {

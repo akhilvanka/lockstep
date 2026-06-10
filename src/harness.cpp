@@ -50,6 +50,7 @@ bool deserialize(const std::vector<uint8_t>& buf, Hart& h) {
     h.trap = (Trap)*p++;
     h.exit_code = (int)(int64_t)get_u64(p); p += 8;
     h.trap_pc = get_u64(p); p += 8;
+    h.mark_all();
     return p == end;
 }
 
@@ -93,6 +94,7 @@ class LocalLane final : public Lane {
             hart_.x[idx] ^= 1ULL << (bit & 63);
         } else if (kind == 1 && idx < hart_.mem.size()) {
             hart_.mem[idx] ^= (uint8_t)(1u << (bit & 7));
+            hart_.mark(kMemBase + idx, 1);
         }
     }
 
